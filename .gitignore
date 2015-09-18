@@ -1,0 +1,4 @@
+*.swp
+/init_*.lua
+/*.config.lua
+NecroBot.lua
