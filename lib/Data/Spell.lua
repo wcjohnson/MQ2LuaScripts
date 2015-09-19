@@ -105,5 +105,10 @@ function SpellTools.findAbility(name)
 	return name, 'spell'
 end
 
+-- For a clicky item, get the spell it will cast
+function SpellTools.getItemSpellName(itemName)
+	return data( ("FindItem[=%s].Spell.Name"):format(itemName) )
+end
+
 
 return SpellTools

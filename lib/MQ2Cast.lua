@@ -6,13 +6,15 @@
 local find = string.find
 local extend = require("Util").extend
 
+local Core = require("Core")
 local Task = require("Core.Task")
 local MQ2 = require("MQ2")
 local exec = MQ2.exec
 local data = MQ2.data
 local Spell = require("Data.Spell")
 
-local function debug(...) MQ2.log(...) end
+--local function debug(...) Core.print(...) end
+local function debug(...) end
 
 --------------------------------- MQ2cast interface
 local function CastStatus()
@@ -57,16 +59,18 @@ function castTask:castStatusChanged()
 end
 
 function castTask:castDone()
+	local cast = self.cast
 	local result = CastResult()
 	debug("castTask:castDone ", tostring(result))
-	if result == "CAST_SUCCESS" then
-		self.cast:_success()
-	else
-		self.cast:_failure(result)
-	end
 	-- Clear task status and stop runloop.
 	self.cast = nil
 	self:loop(nil)
+	-- Invoke callbacks on task
+	if result == "CAST_SUCCESS" then
+		return cast:_success()
+	else
+		return cast:_failure()
+	end
 end
 
 function castTask:castStart()
@@ -100,6 +104,12 @@ function Cast:setAbility(name)
 	local name, ty = Spell.findAbility(name)
 	if not name then return nil end
 	self.name = name; self.type = ty
+	if ty == "item" then
+		-- For clickies, get the name of the buff they will put up
+		self.buffName = Spell.getItemSpellName(name)
+	else
+		self.buffName = name
+	end
 	self:computeCommand()
 	return true
 end
@@ -119,6 +129,9 @@ function Cast:computeCommand()
 	self.command = castPortion
 end
 
+-- Compute the buff name this cast would apply.
+function Cast:getBuffName() return self.buffName end
+
 -- Execute the cast.
 function Cast:execute()
 	-- Make sure the cast paramters exist
@@ -130,7 +143,8 @@ function Cast:execute()
 	-- Make sure mq2cast is ready to cast.
 	self.status = CastStatus()
 	if (castTask.cast) or (not find(self.status, "I")) then
-		return self:failed(true, "CAST_BUSY")
+		debug("Cast:execute() failed because CAST_BUSY")
+		return self:_failure("CAST_BUSY")
 	end
 	-- Launch spellcast.
 	debug("Cast:execute(): casting ", self.type, " '", self.name, "' with command '", self.command, "'")
