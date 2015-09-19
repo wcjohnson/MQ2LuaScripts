@@ -5,25 +5,22 @@
 -- Loosely based on MQ2Cast_Spell_Routines
 local find = string.find
 local extend = require("Util").extend
+local callMethod = require("Util").callMethod
 
 local Core = require("Core")
 local Task = require("Core.Task")
 local MQ2 = require("MQ2")
 local exec = MQ2.exec
 local data = MQ2.data
+local clock = MQ2.clock
 local Spell = require("Data.Spell")
 
 --local function debug(...) Core.print(...) end
 local function debug(...) end
 
 --------------------------------- MQ2cast interface
-local function CastStatus()
-	return data("Cast.Status")
-end
-
-local function CastResult()
-	return data("Cast.Result")
-end
+local function CastStatus() return data("Cast.Status") end
+local function CastResult() return data("Cast.Result") end
 
 ------------------------------ CASTING TASK
 -- A background task that watches for casts and processes them.
@@ -40,12 +37,14 @@ function castTask:main()
 		cast.status = castStatus
 		self:event("castStatusChanged")
 	end
+	-- Timeout if MQ2cast isn't bothering to try and cast this
+	if ((clock() - self.started) > cast.precastTimeout) and (not self.casting) then
+		self:event("castDone", "CAST_TIMEOUT")
+	end
 end
 
-function castTask:handleEvent(ev)
-	--MQ2.log("castTask:handleEvent ", tostring(ev))
-	local x = self[ev]
-	if x then x(self, ev) end
+function castTask:handleEvent(ev, ...)
+	return callMethod(self, ev, ...)
 end
 
 function castTask:castStatusChanged()
@@ -55,16 +54,17 @@ function castTask:castStatusChanged()
 	debug("castTask:castStatusChanged ", tostring(status))
 	if not find(cast.status, "C") then
 		self:event("castDone")
+	else
+		self.casting = true
 	end
 end
 
-function castTask:castDone()
+function castTask:castDone(result)
 	local cast = self.cast
-	local result = CastResult()
+	local result = result or CastResult()
 	debug("castTask:castDone ", tostring(result))
 	-- Clear task status and stop runloop.
-	self.cast = nil
-	self:loop(nil)
+	self.cast = nil; self.casting = false; self:loop(nil)
 	-- Invoke callbacks on task
 	if result == "CAST_SUCCESS" then
 		return cast:_success()
@@ -75,6 +75,8 @@ end
 
 function castTask:castStart()
 	debug("castTask:castStart")
+	self.started = clock()
+	self.casting = false
 	self:loop(0.2)
 end
 
@@ -94,6 +96,7 @@ function Cast:new(data)
 	x.memorize = true
 	x.waitForCooldown = true
 	x.gem = Spell.getDefaultGem()
+	x.precastTimeout = 1 -- How long should I wait for MQ2Cast to reach "C" state
 	-- Mixin options
 	extend(x, data)
 	return x
@@ -138,13 +141,19 @@ function Cast:execute()
 	if (not self.type) or (not self.name) or (not self.command) then
 		error("attempt to execute unspecified cast")
 	end
-	-- If we have a nomem spellcast, make sure the spell is already in a gem.
-
 	-- Make sure mq2cast is ready to cast.
 	self.status = CastStatus()
 	if (castTask.cast) or (not find(self.status, "I")) then
 		debug("Cast:execute() failed because CAST_BUSY")
 		return self:_failure("CAST_BUSY")
+	end
+	-- If we have a nomem spellcast, make sure the spell is already in a gem.
+	-- For item spellcasts, make sure item is ready.
+	if self.type == "item" then
+		if not Spell.ready(self.name) then
+			debug("Cast:execute(): failed because of item cooldown")
+			return self:_failure("CAST_COOLDOWN")
+		end
 	end
 	-- Launch spellcast.
 	debug("Cast:execute(): casting ", self.type, " '", self.name, "' with command '", self.command, "'")
@@ -152,6 +161,15 @@ function Cast:execute()
 	castTask:event("castStart")
 	exec(self.command)
 	return self
+end
+
+-- A waitable version of this task for use with task:waitFor()
+function Cast:waitable()
+	return function(notificationTarget)
+		if not notificationTarget then return self:execute() end
+		function self:succeeded() notificationTarget:event("cast_succeeded") end
+		function self:failed(reason) notificationTarget:event("cast_failed", reason) end
+	end
 end
 
 -- Internal Callbacks

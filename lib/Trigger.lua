@@ -84,7 +84,7 @@ function Trigger.Cast(cond, spell, castOptions)
 		self.cast = cast
 		if cond(self) then
 			-- Cast the spell and wait for a result.
-			ev = self:waitFor(cast:execute())
+			ev = self:waitFor(cast:waitable())
 			return ev
 		end
 	end

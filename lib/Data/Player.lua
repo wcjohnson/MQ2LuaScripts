@@ -1,27 +1,29 @@
 local MQ2 = require("MQ2")
 local data = MQ2.data
+local exec = MQ2.exec
 
 local Player = {}
 
-function Player.hasLongBuff(name)
-	return data( ("Me.Buff[%s]"):format(name) )
+-- Basic stats
+function Player.pctHealth() return data("Me.PctHPs") end
+function Player.pctMana() return data("Me.PctMana") end
+function Player.outOfCombat()
+	local cs = data("Me.CombatState")
+	if cs == "ACTIVE" or cs == "RESTING" then return true else return false end
 end
 
-function Player.hasShortBuff(name)
-	return data( ("Me.Song[%s]"):format(name) )
-end
+-- Buffs
+function Player.hasLongBuff(name) return data( ("Me.Buff[%s]"):format(name) ) end
+function Player.hasShortBuff(name) return data( ("Me.Song[%s]"):format(name) ) end
+function Player.removeBuff(name) return exec( ("/removebuff %s"):format(name) ) end
 
-function Player.buffPosture()
+-- Common checks
+function Player.castingPosture()
 	return (not data("Me.Moving")) and data("Me.Standing") and (not data("Me.Invis"))
 end
+Player.buffPosture = Player.castingPosture -- Old name
 
-function Player.pctHealth()
-	return data("Me.PctHPs")
-end
 
-function Player.pctMana()
-	return data("Me.PctMana")
-end
 
 -- "Idle zones" - zones where automated action should be suppressed
 local idleZone = {}

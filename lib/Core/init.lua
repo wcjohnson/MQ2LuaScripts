@@ -1,17 +1,75 @@
 local _G = _G
+local next = _G.next
+local Util = require("Util")
+local strcat = Util.strcat
 local Signal = require("Util.Signal")
+local Task = require("Util.Task")
 
--- Expose macroquest api as a global.
 local MQ2 = require("MQ2")
 _G.MQ2 = MQ2
-
 local Core = {}
+_G.Core = Core
 
--- basic event handlers
+----------------------------------------------------------- BASIC IO
+local _print = MQ2.print
+function Core.print(...) return _print(strcat(...)) end
+function Core.log(...) return _print(strcat(...)) end
+
+local debugVerbosity = 0
+function Core.debug(level, ...)
+	if level > debugVerbosity then return end
+	return _print(strcat(...))
+end
+function Core.setDebugVerbosity(dv) debugVerbosity = dv end
+
+----------------------------------------------------------- PULSES
+-- Pulse handler. XXX: cheating here and peering into the internal structure
+-- of the Signal for a little performance boost.
 local pulse = Signal:new()
-MQ2.event("pulse", function() pulse:raise() end)
+local pulsars = pulse[1]
+MQ2.event("pulse", function()
+	for _,fn in next,pulsars do fn() end
+end)
 Core.pulse = pulse
 
+-- Initialize taskmaster
+pulse:connect( Task.taskmaster(MQ2.clock) )
+
+--------------------------------------------------------- COMMANDS
+local command = Signal:new()
+Core.command = command
+function Core.onCommand(name, rest)
+	MQ2.print("Core.onCommand(", name, ", '", rest ,"')")
+	return command:raise(name, rest)
+end
+
+-- Command registry
+local commandRegistry = {}
+command:connect( function(name, rest)
+	local handler = commandRegistry[name];
+	if not handler then
+		local ok, msg = pcall( function() require( ("Command.%s"):format(name) ) end )
+		if not ok then
+			MQ2.print("couldn't dynamically load command ", tostring(name), ": ", tostring(msg))
+			return
+		end
+		handler = commandRegistry[name];
+	end
+	if not handler then return end
+	handler(name, rest)
+end )
+
+function Core.registerCommand(cmd, handler)
+	commandRegistry[cmd] = handler
+end
+
+-- Basic commands
+Core.registerCommand("eval", function(cmd, rest)
+	fn, err = load(rest, "console")
+	if fn then return fn() else error(err) end
+end)
+
+--------------------------------------------------------------- OTHER EVENTS
 local shutdown = Signal:new()
 function Core._shutdown()
 	MQ2.print("Core.shutdownHandler()");
@@ -64,21 +122,6 @@ Core.leftZone = leftZone
 
 function Core._enteredZone()
 	MQ2.log("Core._enteredZone()")
-end
-
-local function concat(...)
-	local tbl = {}
-	for i=1,select("#",...) do
-		tbl[i] = tostring(select(i,...))
-	end
-	return table.concat(tbl)
-end
-
-function Core.print(...)
-	MQ2.print(concat(...))
-end
-function Core.log(...)
-	MQ2.log(concat(...))
 end
 
 
