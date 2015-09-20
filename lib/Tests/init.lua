@@ -65,8 +65,4 @@ function Tests.splitspell(sp)
 	MQ2.print(tostring(SpellUtil.getRanked(a)))
 end
 
-function Tests.trigger()
-	Trigger:new( Trigger.BuffSpell("Shield of Dreams") )
-end
-
 return Tests

@@ -4,94 +4,62 @@
 --
 -- Uses XTarget to keep track of haters.
 --
-local MQ2 = require("MQ2")
-local data = MQ2.data
 
+local Core = require("Core")
 local Task = require("Core.Task")
 local Target = require("Data.Target")
 local getXTInfo = Target.getXTInfo
 local Spawn = require("Data.Spawn")
 local Signal = require("Util.Signal")
+local SpawnFilter = require("Data.SpawnFilter")
 
 ----------------- Hater monitor.
-local haters = {}
 local nhaters = 0
+local Haters = SpawnFilter:new()
 local onHatersChanged = Signal:new()
 
-local h8rade = Task:new()
-h8rade:loop(0.5)
-
-function h8rade:main()
+function Haters:updater()
 	local id, ty, tt, name, aggro, hp
 	local hater
-	local changed = false
-
-	-- Mark all haters
-	for k,v in pairs(haters) do
-		v._hater_visited = false
-	end
-	nhaters = 0
+	local set = self:table()
+	local newHaters = {}
 
 	-- Pull hate data from xtargets
+	nhaters = 0
 	for i=1,13 do
 		id, tt, ty, name, hp, aggro = getXTInfo(i)
 		if id and (tt == "Auto Hater") and (ty == "NPC") then
-			hater = haters[id]
+			newHaters[id] = true
+			hater = set[id]
 			if not hater then
 				-- Hater wasn't on the list; add it.
 				hater = Spawn:forID(id)
-				haters[id] = hater
-				changed = true
+				self:add(hater)
 			end
-			-- Update hater info
-			hater._hater_visited = true
 			hater.name = name
 			hater.aggro = aggro
 			hater.hp = hp
+
 			nhaters = nhaters + 1
 		end
 	end
 
-	-- Remove any non-visited haters
-	for k,v in pairs(haters) do
-		if not v._hater_visited then
-			haters[k] = nil
-			changed = true
-		end
-	end
-
-	-- If our haters changed let listeners know.
-	if changed then onHatersChanged:raise() end
+	-- Remove stale haters.
+	self:intersect(newHaters)
 end
 
-h8rade:run()
+Haters:update(0.25)
+
+function Haters:added(spawn)
+	Core.print("haterFilter:added ", spawn.id, spawn:Name())
+end
+
+function Haters:removed(spawn)
+	Core.print("haterFilter:removed ", spawn.id, spawn:Name())
+end
+
 
 ----------------------- API
-local Haters = {}
-
-Haters.onHatersChanged = onHatersChanged
-
--- Pack haters into an array.
-function Haters.packInto(array)
-	local oldsz, i = #array, 1
-	for k,v in pairs(haters) do
-		array[i] = v
-		i = i + 1
-	end
-	for j=i,oldsz do
-		array[j] = nil
-	end
-	return array
-end
-
--- Check if the given spawn is a hater
-function Haters.byID(id)
-	return haters[id or 0]
-end
-
-function Haters.getNHaters()
-	return nhaters
-end
-
+Haters.onChanged = onHatersChanged
 
 return Haters

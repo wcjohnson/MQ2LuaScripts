@@ -15,7 +15,7 @@ local Util = require("Util")
 local filter_array = Util.filter_array
 local remove_element = Util.remove_element
 
---local function debug(...) MQ2.log(...) end
+--local function debug(...) require("Core").log(...) end
 local function debug(...) end
 
 local function compressEvent(ev, ...)
@@ -180,6 +180,9 @@ end
 -- Enqueue the given task in the taskmaster.
 function Task:run()
 	self:event("_start")
+	taskmaster_add(self)
+end
+function Task:prepare()
 	taskmaster_add(self)
 end
 

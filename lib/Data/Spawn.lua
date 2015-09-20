@@ -5,6 +5,7 @@
 -- Spawn object.
 --
 local Core = require("Core")
+local data = Core.data
 
 local spawndb = {}
 
@@ -26,6 +27,11 @@ function Spawn:forID(id)
 	local x = spawndb[id]
 	if x then return x end
 	x = Spawn:new(id); spawndb[id] = x; return x
+end
+
+function Spawn:Name()
+	if self.name then return self.name end
+	return data( ("Spawn[%d].CleanName"):format(self.id) )
 end
 
 return Spawn

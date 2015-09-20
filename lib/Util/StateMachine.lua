@@ -8,7 +8,7 @@
 local Util = require("Util")
 local extend = Util.extend
 
-local debug = function(...) require("MQ2").log(...) end
+local debug = function(...) require("Core").log(...) end
 
 local StateMachine = {}
 
