@@ -7,10 +7,20 @@ local tostring = _G.tostring;
 local tconcat = _G.table.concat;
 local setmetatable = _G.setmetatable;
 local getmetatable = _G.getmetatable;
+local error = error
 
 local Util = {}
 
+------------------------ Functionals.
 function Util.noop() end
+function Util.True() return true end
+function Util.False() return false end
+function Util.Nil() return nil end
+function Util.identity(x) return x end
+function Util.constant(k) return function() return k end end
+function Util.iota(i0) local i = i0 or 0; return function() i = i + 1; return i end end
+function Util.Error(str, lv) return function() error(str, lv or 2) end end
+
 
 -- Call a function if it exists.
 function Util.call(f, ...)
@@ -21,6 +31,25 @@ end
 function Util.callMethod(self, index, ...)
 	local fn = self[index]
 	if fn then return fn(self, ...) end
+end
+
+-- Call a method on an object's metatable if it exists.
+function Util.callMetaMethod(self, metaIndex, ...)
+	local mt = getmetatable(self); if not mt then return end
+	local fn = mt[metaIndex];
+	if fn then return fn(self, ...) end
+end
+
+-- Get an element on an object's metatable if it exists.
+function Util.getMeta(self, k)
+	local mt = getmetatable(self); if not mt then return nil end
+	return mt[k]
+end
+
+-- Set an element on an objects metatable if it exists.
+function Util.setMeta(self, k, v)
+	local mt = getmetatable(self); if not mt then return end
+	mt[k] = v
 end
 
 -- Writes the array portion of all the sources into the target and returns the target.
@@ -40,7 +69,7 @@ function Util.concat_arrays(target, ...)
 			end -- if nsource > 0
 		end -- if type(source) == table
 	end -- for i=1,select("#")
-	
+
 	return target;
 end
 
@@ -50,15 +79,15 @@ function Util.concat_hashes(target, ...)
 	for i=1,select("#", ...) do
 		local source = select(i, ...);
 		if type(source) == "table" then
-			for key, value in next, source do 
+			for key, value in next, source do
 				if type(key) ~= "number" then
 					if not target then target = {}; end
-					target[key] = value; 
+					target[key] = value;
 				end -- type(key) ~= number
 			end -- for key,value
 		end -- if type(source) == table
 	end -- for i=1,select(#)
-	
+
 	return target;
 end
 
@@ -102,23 +131,19 @@ end
 -- @in any t Arbitrary Lua data.
 -- @out any tc A deep copy of t if t was a table. t if t was a non-table primitive.
 -----
-local copied = {}; -- A cache of stuff already copied to prevent circular references from inf-looping.
-local function copyWorker(x)
+local function copyWorker(x, copied)
 	-- If x is not a table or we've copied it before, early out
 	if type(x) ~= "table" then return x; elseif copied[x] then return copied[x];end
 	-- x is a table we haven't copied before. Create it.
 	local newTable = {}; copied[x] = newTable;
 	-- Copy each of the key/value pairs into the new table
-	for k,v in next,x do newTable[copyWorker(k)] = copyWorker(v); end
+	for k,v in next,x do newTable[copyWorker(k, copied)] = copyWorker(v, copied); end
 	-- Copy the metatable
 	return setmetatable(newTable, getmetatable(x));
 end
 
 function Util.deep_copy(t)
-	local copy = copyWorker(t);
-	-- Clear the cache for GC purposes
-	for k in next,copied do copied[k] = nil; end
-	return copy;
+	return copyWorker(t, {});
 end
 
 
@@ -144,14 +169,15 @@ end
 -- @return string The ordered concatenation of all strings in ...
 -----
 function Util.strcat(...)
-	cattbl = {}
 	local n = select("#", ...)
 	if n>1 then
+		local cattbl = {}
 		for i=1,select("#",...) do cattbl[i] = tostring(select(i,...)); end
 		return tconcat(cattbl)
-	else
-		-- Earlyout case.
+	elseif n == 1 then
 		return tostring(...);
+	else
+		return ""
 	end
 end
 
@@ -175,7 +201,7 @@ function Util.filter_array(dst, src, filter)
 	end
 	-- Destroy everything to the "right" of the cursor.
 	for i=(cursor + 1),#dst do dst[i] = nil; end
-		
+
 	return dst;
 end
 

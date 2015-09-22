@@ -94,6 +94,15 @@ local function taskmaster_nextTask(t)
 	end
 end
 
+local function taskmaster_add(task)
+	tasks[#tasks + 1] = task
+end
+
+local function taskmaster_remove(task)
+	remove_element(tasks, task)
+end
+
+-- Taskmaster mainloop.
 local tasksPerTick = 5
 local function taskmaster_loop()
 	local t = clock()
@@ -102,13 +111,7 @@ local function taskmaster_loop()
 	end
 end
 
-local function taskmaster_add(task)
-	tasks[#tasks + 1] = task
-end
 
-local function taskmaster_remove(task)
-	remove_element(tasks, task)
-end
 
 -- Set up the taskmaster.
 -- Pass in a clock function, which will return a monotone increasing
@@ -132,7 +135,7 @@ function task_main(self, ev)
 			-- Run the mainloop.
 			self:main()
 			-- If we're still looping...
-			if self.runLoopDelay then 
+			if self.runLoopDelay then
 				-- Schedule the next loop iteration
 				self.runLoopDue = t + self.runLoopDelay
 			else
@@ -151,7 +154,7 @@ function task_main(self, ev)
 		end
 		-- If we're looping, and the run loop is due...
 		if self.runLoopDelay and (t > (self.runLoopDue or 0)) then
-			-- Send "_start" to ourselves.			
+			-- Send "_start" to ourselves.
 			self:event("_start")
 		end
 		-- Wait until the run loop is due, or until woken by an event if we aren't looping.

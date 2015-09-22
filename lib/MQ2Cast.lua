@@ -8,7 +8,7 @@ local extend = require("Util").extend
 local callMethod = require("Util").callMethod
 
 local Core = require("Core")
-local Task = require("Core.Task")
+local Task = require("Util.Task")
 local MQ2 = require("MQ2")
 local exec = MQ2.exec
 local data = MQ2.data

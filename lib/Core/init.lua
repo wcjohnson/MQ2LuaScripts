@@ -1,9 +1,12 @@
 local _G = _G
-local next = _G.next
 local Util = require("Util")
-local strcat = Util.strcat
 local Signal = require("Util.Signal")
 local Task = require("Util.Task")
+local Deferred = require("Util.Deferred")
+
+local next = next
+local pcall = pcall
+local strcat = Util.strcat
 
 -- Expose MQ2 and Core globally
 local MQ2 = require("MQ2")
@@ -12,6 +15,7 @@ local Core = {}
 _G.Core = Core
 -- Expose data and exec thru Core.
 Core.data = MQ2.data
+Core.xdata = MQ2.xdata
 Core.exec = MQ2.exec
 
 ----------------------------------------------------------- BASIC IO
@@ -19,13 +23,15 @@ local _print = MQ2.print
 function Core.print(...) return _print(strcat(...)) end
 function Core.log(...) return _print(strcat(...)) end
 function Core.error(...) return _print(strcat(...)) end
+_G.print = Core.print
 
-local debugVerbosity = 0
+local debugVerbosity = 10
 function Core.debug(level, ...)
 	if level > debugVerbosity then return end
-	return _print(strcat(...))
+	return _print(strcat("[Debug ", level, "] ", ...))
 end
 function Core.setDebugVerbosity(dv) debugVerbosity = dv end
+local debug = Core.debug
 
 --------------------------------------------------------- CONNECT TO MQ2 EVENTS
 -- Pulse handler. XXX: cheating here and peering into the internal structure
@@ -36,22 +42,34 @@ MQ2.pulse(function() for _,fn in next,pulsars do fn() end end)
 Core.pulse = pulse
 -- Initialize taskmaster
 pulse:connect( Task.taskmaster(MQ2.clock) )
+pulse:connect( Deferred.loop )
 
--- Event handlers
+---- Event handlers
+-- This is all events MQ2Lua knows about.
+local evtList = {
+	"command", "shutdown", "enteredWorld", "leftWorld", "gameStateChanged",
+	"zoned", "enteredZone", "leftZone",
+	"onAddSpawn", "onRemoveSpawn", "onAddGroundItem", "onRemoveGroundItem",
+	"cleanUI", "reloadUI"
+}
+
 local events = {}
 MQ2.events(events)
 
---------------------------------------------------------- COMMANDS
-local command = Signal:new()
-Core.command = command
-function events.command(name, rest)
-	Core.print("Core.onCommand(", name, ", '", rest ,"')")
-	return command:raise(name, rest)
+for i=1,#evtList do
+	local ename = evtList[i]
+	local esig = Signal:new()
+	Core[ename] = esig
+	events[ename] = function(...)
+		--debug(10, "Core.events.", ename, ": ", ...)
+		return esig:raise(...)
+	end
 end
 
+--------------------------------------------------------- COMMANDS
 -- Command registry
 local commandRegistry = {}
-command:connect( function(name, rest)
+Core.command:connect( function(name, rest)
 	local handler = commandRegistry[name];
 	if not handler then
 		local ok, rst = pcall( require, ("Command.%s"):format(name) )
@@ -68,67 +86,36 @@ end )
 
 function Core.registerCommand(cmd, handler) commandRegistry[cmd] = handler end
 
--- Basic commands
+-- /lua eval command
 Core.registerCommand("eval", function(cmd, rest)
 	fn, err = load(rest)
 	if fn then return fn() else return error(err) end
 end)
 
---------------------------------------------------------------- OTHER EVENTS
-local shutdown = Signal:new()
-function events.shutdown()
-	Core.log("events.shutdown()");
-	return shutdown:raise()
+--------------------------------------------------------------- SCRIPT LOADER
+function Core.runscript(filename, silent)
+	local ok, rst = pcall(MQ2.load, filename)
+	if ok and rst then
+		ok, rst = pcall(rst)
+		if not ok then
+			Core.error("Error evaluating ", filename, ": ", rst)
+		end
+	else
+		debug(2, "Core.loadscript: ", rst)
+		if not silent then
+			Core.error( rst )
+		end
+	end
 end
-Core.shutdown = shutdown
 
-local enteredWorld = Signal:new()
-function events.enteredWorld()
-	Core.log("events.enteredWorld()");
+Core.enteredWorld:connect( function()
 	-- Load the character's init.lua profile.
 	charName = MQ2.data("Me.CleanName")
 	serverName = MQ2.data("MacroQuest.Server")
 	initName = ("init_%s_%s.lua"):format(charName, serverName)
 	Core.print("Loading init script: ", initName);
-	local ok, initFunc = pcall(MQ2.load, initName)
-	if ok and initFunc then
-		local ok, err = pcall(initFunc)
-		if not ok then
-			Core.error("Error while running ", initName, ": ", err)
-		end
-	else
-		Core.log("Couldnt load ", initName, ": ", initFunc)
-	end
-	return enteredWorld:raise()
-end
-Core.enteredWorld = enteredWorld
+	return Core.runscript(initName, true)
+end)
 
-local leftWorld = Signal:new()
-function events.leftWorld()
-	Core.log("Core.leftWorld()");
-	return leftWorld:raise()
-end
-Core.leftWorld = leftWorld
-
-function events.gameStateChanged()
-	Core.log("Core.gameStateChanged(", MQ2.gamestate(), ")");
-end
-
-function events.zoned()
-	Core.log("Core.zoned()")
-end
-
-local leftZone = Signal:new()
-function events.leftZone()
-	Core.log("Core.leftZone()")
-	return leftZone:raise()
-end
-Core.leftZone = leftZone
-
-function events.enteredZone()
-	Core.log("Core.enteredZone()")
-end
-
-
-Core.print("Core loaded");
+Core.print("[MQ2Lua] ==================== Core loaded");
 return Core

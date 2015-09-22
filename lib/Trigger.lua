@@ -4,7 +4,7 @@
 --
 -- System similar to MQ2Melee's "downshits."
 -- 
-local Task = require("Core.Task")
+local Task = require("Util.Task")
 local Player = require("Data.Player")
 local Spell = require("Data.Spell")
 local MQ2 = require("MQ2")

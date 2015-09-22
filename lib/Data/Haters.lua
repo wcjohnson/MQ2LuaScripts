@@ -6,22 +6,23 @@
 --
 
 local Core = require("Core")
-local Task = require("Core.Task")
+local Task = require("Util.Task")
 local Target = require("Data.Target")
-local getXTInfo = Target.getXTInfo
 local Spawn = require("Data.Spawn")
 local Signal = require("Util.Signal")
 local SpawnFilter = require("Data.SpawnFilter")
+local Deferred = require("Util.Deferred")
+
+local getXTInfo = Target.getXTargetInfo
 
 ----------------- Hater monitor.
 local nhaters = 0
 local Haters = SpawnFilter:new()
-local onHatersChanged = Signal:new()
 
-function Haters:updater()
+Haters:updater( function(self)
 	local id, ty, tt, name, aggro, hp
 	local hater
-	local set = self:table()
+	local set = self
 	local newHaters = {}
 
 	-- Pull hate data from xtargets
@@ -45,21 +46,28 @@ function Haters:updater()
 	end
 
 	-- Remove stale haters.
-	self:intersect(newHaters)
-end
+	self:intersectWith(newHaters)
+end )
 
 Haters:update(0.25)
+Haters:onAdded( function(_, id, spawn)
+	Core.print("haterFilter:added ", id, spawn:Name())
+end)
+Haters:onRemoved( function(_, id, spawn)
+	Core.print("haterFilter:removed ", id, spawn:Name())
+end)
 
-function Haters:added(spawn)
-	Core.print("haterFilter:added ", spawn.id, spawn:Name())
-end
+------------
+local exports = {}
+exports.set = Haters
 
-function Haters:removed(spawn)
-	Core.print("haterFilter:removed ", spawn.id, spawn:Name())
-end
+local onChanged = Signal:new()
+exports.onChanged = onChanged
 
+local debounceChanges = Deferred.debounce( function()
+	return onChanged:raise(Haters)
+end )
+Haters:onAdded(debounceChanges)
+Haters:onRemoved(debounceChanges)
 
------------------------ API
-Haters.onChanged = onHatersChanged
-
-return Haters
+return exports
