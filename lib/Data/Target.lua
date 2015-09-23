@@ -21,4 +21,8 @@ end
 Target.getXTargetInfo = getXTargetInfo
 
 
+function Target.hasMyBuff(name)
+	return xdata("Target", nil, "Buff", name, "Caster") == xdata("Me", nil, "CleanName")
+end
+
 return Target

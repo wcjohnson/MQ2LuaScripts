@@ -1,6 +1,7 @@
 local MQ2 = require("MQ2")
 local data = MQ2.data
 local exec = MQ2.exec
+local xdata = MQ2.xdata
 
 local Player = {}
 

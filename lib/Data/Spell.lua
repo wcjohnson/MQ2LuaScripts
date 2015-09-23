@@ -1,12 +1,21 @@
-local MQ2 = require("MQ2")
-local data = MQ2.data
+local Core = require("Core")
+local Signal = require("Util.Signal")
+local Task = require("Util.Task")
+
+local data = Core.data
+local xdata = Core.xdata
 
 local function book(name)
-	return data( ("Me.Book[%s]"):format(name) ) and true or false
+	return xdata( "Me", nil, "Book", name ) and true or false
+	-- return data( ("Me.Book[%s]"):format(name) ) and true or false
 end
 
 local function stacks(name)
-	return data( ("Spell[%s].Stacks"):format(name) ) and true or false
+	return xdata( "Spell", name, "Stacks" ) and true or false
+end
+
+local function gem(index)
+	return xdata( "Me", nil, "Gem", index )
 end
 
 local function split(spell)
@@ -29,6 +38,10 @@ local defaultGem = 8
 function SpellTools.getDefaultGem() return defaultGem end
 function SpellTools.setDefaultGem(n) defaultGem = n end
 
+-- Total number of spell gems
+local numGems = 12
+function SpellTools.numGems() return numGems end
+
 -- Check if you have the spell.
 function SpellTools.known(name)
 	return book(name)
@@ -46,7 +59,8 @@ end
 
 -- Check if you can cast a spell.
 function SpellTools.ready(name)
-	return data( ("Cast.Ready[%s]"):format(name) )
+	return xdata("Cast", nil, "Ready", name)
+	--return data( ("Cast.Ready[%s]"):format(name) )
 end
 
 -- Check if you have a spell memorized.
@@ -110,5 +124,33 @@ function SpellTools.getItemSpellName(itemName)
 	return data( ("FindItem[=%s].Spell.Name"):format(itemName) )
 end
 
+-- Get information about the spell in the given gem.
+function SpellTools.getSpellInfoForGem(i)
+	if (type(i) ~= "number") or (not gem(i)) then return nil end
+	return
+		xdata("Me", nil, "Gem", i, "ID"),
+		xdata("Me", nil, "Gem", i, "Name")
+end
+
+------------------------------ Gem contents signal
+-- People may want to know when memmed spells change.
+local onGemsChanged = Signal:new()
+local gemContents = {}
+
+local gcTask = Task:new()
+function gcTask:main()
+	local changed = false
+	for i=1,numGems do
+		local id, name = SpellTools.getSpellInfoForGem(i)
+		if name ~= gemContents[i] then
+			gemContents[i] = name; changed = true;
+		end
+	end
+	if changed then onGemsChanged:raise() end
+end
+gcTask:loop(1)
+gcTask:run()
+
+SpellTools.onGemsChanged = onGemsChanged
 
 return SpellTools

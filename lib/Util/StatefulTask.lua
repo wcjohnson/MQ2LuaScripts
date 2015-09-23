@@ -42,13 +42,16 @@ local function stReplay(self)
 end
 
 local function stMain(self)
-	local loopFunc = self[ ("%s_loop"):format(self:state()) ]
+	local loopFunc = self[ ("loop_%s"):format(self:state()) ]
 	if loopFunc then return loopFunc(self) end
 	-- Begin by transitioning to "main" state.
 	if self:state() == "__init" then
-		log("StatefulTask: invoking default transition")
 		self:transitionTo("main")
 	end
+end
+
+local function stNextState(self, where, ...)
+	return self:event("transitionTo", where, ...)
 end
 
 local StatefulTask = {}
@@ -57,7 +60,7 @@ function StatefulTask:new()
 	local t = Task:new()
 	StateMachine:mixInto(t)
 	t._replayQ = {}
-	t.stash = stStash; t.replay = stReplay
+	t.stash = stStash; t.replay = stReplay; t.nextState = stNextState
 	t.handleEvent = stHandleEvent; t.main = stMain
 	return t
 end

@@ -162,6 +162,15 @@ function Util.pack(A, ...)
 	return A;
 end
 
+-- Util.find
+-- Find key for entry with given value.
+function Util.find(T, what)
+	for k,v in next,T do
+		if v == what then return k end
+	end
+	return nil
+end
+
 -----
 -- @function XF.Util.strcat
 -- @descr Convert all arguments to strings and then concatenate.

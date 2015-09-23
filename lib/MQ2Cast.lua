@@ -10,13 +10,16 @@ local callMethod = require("Util").callMethod
 local Core = require("Core")
 local Task = require("Util.Task")
 local MQ2 = require("MQ2")
-local exec = MQ2.exec
-local data = MQ2.data
-local clock = MQ2.clock
 local Spell = require("Data.Spell")
 
+local exec = MQ2.exec
+local data = MQ2.data
+local xdata = MQ2.xdata
+local clock = MQ2.clock
+local cdebug = Core.debug
+
 --local function debug(...) Core.print(...) end
-local function debug(...) end
+local function debug(...) cdebug(5, ...) end
 
 --------------------------------- MQ2cast interface
 local function CastStatus() return data("Cast.Status") end
@@ -155,12 +158,22 @@ function Cast:execute()
 			return self:_failure("CAST_COOLDOWN")
 		end
 	end
+	-- If not standing, stand up.
+	if not xdata("Me", nil, "Standing") then
+		exec([[/stand]])
+	end
 	-- Launch spellcast.
 	debug("Cast:execute(): casting ", self.type, " '", self.name, "' with command '", self.command, "'")
 	castTask.cast = self
 	castTask:event("castStart")
 	exec(self.command)
 	return self
+end
+
+-- Interrupt the cast, if it is still casting.
+function Cast:interrupt()
+	if castTask.cast ~= self then return end
+	exec([[/interrupt]])
 end
 
 -- A waitable version of this task for use with task:waitFor()

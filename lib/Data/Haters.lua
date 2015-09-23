@@ -34,7 +34,7 @@ Haters:updater( function(self)
 			hater = set[id]
 			if not hater then
 				-- Hater wasn't on the list; add it.
-				hater = Spawn:forID(id)
+				hater = Spawn.forID(id)
 				self:add(hater)
 			end
 			hater.name = name
