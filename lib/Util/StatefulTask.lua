@@ -7,15 +7,25 @@
 --
 local StateMachine = require("Util.StateMachine")
 local Task = require("Util.Task")
+local Util = require("Util")
 
 local compressEvent = Task.compressEvent
 local tinsert = table.insert
 local select = select
+local extend = Util.extend
 
-local log = function(...) require("Core").print(...) end
--- local log = function(...) end
+local StatefulTask = {}
 
-local function stHandleEvent(self, ev, ...)
+function StatefulTask:main()
+	local loopFunc = self[ ("loop_%s"):format(self:state()) ]
+	if loopFunc then return loopFunc(self) end
+	-- Begin by transitioning to "main" state.
+	if self:state() == "__init" then
+		self:transitionTo("main")
+	end
+end
+
+function StatefulTask:handleEvent(ev, ...)
 	local state = self:state()
 	-- Execute a command to transition
 	if ev == "transitionTo" then
@@ -32,36 +42,25 @@ local function stHandleEvent(self, ev, ...)
 	end
 end
 
-local function stStash(self, ev, ...)
-	tinsert(self._replayQ, compressEvent(ev, ...))
+-- Transition the state machine to the given state by enqueuing a message on the
+-- Task's event queue.
+function StatefulTask:nextState(where)
+	return self:event("transitionTo", where)
 end
 
-local function stReplay(self)
-	local rq = self._replayQ; self._replayQ = {}
-	for i=1,#rq do self:_event(rq[i]) end
-end
-
-local function stMain(self)
-	local loopFunc = self[ ("loop_%s"):format(self:state()) ]
-	if loopFunc then return loopFunc(self) end
-	-- Begin by transitioning to "main" state.
-	if self:state() == "__init" then
-		self:transitionTo("main")
-	end
-end
-
-local function stNextState(self, where, ...)
-	return self:event("transitionTo", where, ...)
-end
-
-local StatefulTask = {}
+-- local function stStash(self, ev, ...)
+-- 	tinsert(self._replayQ, compressEvent(ev, ...))
+-- end
+--
+-- local function stReplay(self)
+-- 	local rq = self._replayQ; self._replayQ = {}
+-- 	for i=1,#rq do self:_event(rq[i]) end
+-- end
 
 function StatefulTask:new()
 	local t = Task:new()
 	StateMachine:mixInto(t)
-	t._replayQ = {}
-	t.stash = stStash; t.replay = stReplay; t.nextState = stNextState
-	t.handleEvent = stHandleEvent; t.main = stMain
+	extend(t, StatefulTask)
 	return t
 end
 

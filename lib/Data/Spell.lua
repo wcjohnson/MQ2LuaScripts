@@ -65,7 +65,7 @@ end
 
 -- Check if you have a spell memorized.
 function SpellTools.gem(name)
-	local gemn = data( ("Me.Gem[%s]"):format(name) )
+	local gemn = xdata("Me", nil, "Gem", name)
 	if not gemn then return nil end
 	return gemn
 end
@@ -130,6 +130,18 @@ function SpellTools.getSpellInfoForGem(i)
 	return
 		xdata("Me", nil, "Gem", i, "ID"),
 		xdata("Me", nil, "Gem", i, "Name")
+end
+
+-- Get the cooldown for a spell, AA or item. For spells, if the spell is not
+-- in a gem, returns nil.
+function SpellTools.getCooldown(ty, name)
+	if ty == "spell" then
+		return xdata("Me", nil, "GemTimer", name)
+	elseif ty == "alt" then
+		return xdata("Me", nil, "AltAbilityTimer", name)
+	else
+		return xdata("FindItem", "=" .. name, "TimerReady")
+	end
 end
 
 ------------------------------ Gem contents signal

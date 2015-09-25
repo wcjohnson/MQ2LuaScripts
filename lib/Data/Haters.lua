@@ -2,7 +2,7 @@
 -- Haters.lua
 -- (C)2015 Bill Johnson
 --
--- Uses XTarget to keep track of haters.
+-- Keeps track of information from the XTarget AutoHater system.
 --
 
 local Core = require("Core")
@@ -14,6 +14,7 @@ local SpawnFilter = require("Data.SpawnFilter")
 local Deferred = require("Util.Deferred")
 
 local getXTInfo = Target.getXTargetInfo
+local debug = Core.debug
 
 ----------------- Hater monitor.
 local nhaters = 0
@@ -51,10 +52,12 @@ end )
 
 Haters:update(0.25)
 Haters:onAdded( function(_, id, spawn)
-	Core.print("haterFilter:added ", id, spawn:Name())
+	debug(7, "haterFilter:added ", id, spawn:Name())
 end)
 Haters:onRemoved( function(_, id, spawn)
-	Core.print("haterFilter:removed ", id, spawn:Name())
+	-- Remove cached aggro value, or it will become stale.
+	spawn.aggro = nil
+	debug(7, "haterFilter:removed ", id, spawn:Name())
 end)
 
 ------------

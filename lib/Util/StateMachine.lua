@@ -8,7 +8,8 @@
 local Util = require("Util")
 local extend = Util.extend
 
-local debug = function(...) require("Core").log(...) end
+--local debug = function(...) require("Core").log(...) end
+local debug = function() end
 
 local StateMachine = {}
 
@@ -23,9 +24,7 @@ end
 function StateMachine:state() return self._state end
 
 function StateMachine:transitionTo(newState)
-	if type(newState) ~= "string" then
-		error("States must be strings")
-	end
+	if type(newState) ~= "string" then error("States must be strings") end
 	local currentState, func = self._state
 
 	-- Deferred transition to prevent stack overflow.
